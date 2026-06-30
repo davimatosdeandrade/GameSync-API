@@ -16,6 +16,8 @@ const StorePlatform = require('./StorePlatform');
 const PlatformSystem = require('./PlatformSystem');
 const Offer = require('./Offer');
 const Code = require('./Code');
+const Highlight = require('./Highlight');
+const ProductHighlight = require('./ProductHighlight');
 const User = require('./User');
 const Cart = require('./Cart');
 const CartItem = require('./CartItem');
@@ -28,8 +30,8 @@ Product.belongsTo(Distributor, { foreignKey: 'id_distributor' });
 Product.belongsTo(Developer, { foreignKey: 'id_developer' });
 Product.belongsToMany(Language, { through: ProductLanguage, foreignKey: 'id_product', otherKey: 'id_language' });
 Language.belongsToMany(Product, { through: ProductLanguage, foreignKey: 'id_language', otherKey: 'id_product' });
-Product.belongsToMany(Category, { through: ProductCategory, foreignKey: 'id_product', otherKey: 'id_category'});
-Category.belongsToMany(Product, { through: ProductCategory, foreignKey: 'id_category', otherKey: 'id_product'});
+Product.belongsToMany(Category, { through: ProductCategory, foreignKey: 'id_product', otherKey: 'id_category' });
+Category.belongsToMany(Product, { through: ProductCategory, foreignKey: 'id_category', otherKey: 'id_product' });
 Product.hasMany(RequirementSet, { foreignKey: 'id_product' });
 RequirementSet.belongsTo(Product, { foreignKey: 'id_product' });
 System.hasMany(RequirementSet, { foreignKey: 'id_system' });
@@ -48,6 +50,8 @@ Store.hasMany(Offer, { foreignKey: 'id_store' });
 Offer.belongsTo(Store, { foreignKey: 'id_store' });
 Offer.hasMany(Code, { foreignKey: 'id_offer' });
 Code.belongsTo(Offer, { foreignKey: 'id_offer'});
+Product.belongsToMany(Highlight, { through: ProductHighlight, foreignKey: 'id_product', otherKey: 'id_highlight' });
+Highlight.belongsToMany(Product, { through: ProductHighlight, foreignKey: 'id_highlight', otherKey: 'id_product' });
 User.hasOne(Cart, { foreignKey: 'id_user' });
 Cart.belongsTo(User, { foreignKey: 'id_user' });
 Cart.hasMany(CartItem, { foreignKey: 'id_cart' });
@@ -74,6 +78,8 @@ module.exports = {
     PlatformSystem,
     Offer,
     Code,
+    Highlight,
+    ProductHighlight,
     User,
     Cart,
     CartItem

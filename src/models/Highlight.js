@@ -1,8 +1,8 @@
 const { DataTypes } = require('sequelize');
 const db = require('../config/database');
 
-const Language = db.define('Language', {
-    id_language: {
+const Highlight = db.define('Highlight', {
+    id_highlight: {
         type: DataTypes.INTEGER,
         primaryKey: true,
         autoIncrement: true,
@@ -13,7 +13,7 @@ const Language = db.define('Language', {
         unique: true,
     }
 }, {
-    tableName: 'tb_languages',
+    tableName: 'tb_highlights',
     timestamps: true,
     paranoid: true,
     createdAt: 'dt_createdAt',
@@ -21,4 +21,4 @@ const Language = db.define('Language', {
     deletedAt: 'dt_deletedAt'
 });
 
-module.exports = Language;
+module.exports = Highlight;
