@@ -2,6 +2,7 @@ const Type = require('./Type');
 const Distributor = require('./Distributor');
 const Developer = require('./Developers');
 const Product = require('./Product');
+const Media = require('./Media');
 const Language = require('./Language');
 const ProductLanguage = require('./ProductLanguage');
 const Category = require('./Category');
@@ -28,6 +29,8 @@ Developer.hasMany(Product, { foreignKey: 'id_developer' });
 Product.belongsTo(Type, { foreignKey: 'id_type' });
 Product.belongsTo(Distributor, { foreignKey: 'id_distributor' });
 Product.belongsTo(Developer, { foreignKey: 'id_developer' });
+Product.hasMany(Media, { foreignKey: 'id_product' });
+Media.belongsTo(Product, { foreignKey: 'id_media' });
 Product.belongsToMany(Language, { through: ProductLanguage, foreignKey: 'id_product', otherKey: 'id_language' });
 Language.belongsToMany(Product, { through: ProductLanguage, foreignKey: 'id_language', otherKey: 'id_product' });
 Product.belongsToMany(Category, { through: ProductCategory, foreignKey: 'id_product', otherKey: 'id_category' });
@@ -64,6 +67,7 @@ module.exports = {
     Distributor,
     Developer,
     Product,
+    Media,
     Language,
     ProductLanguage,
     Category,

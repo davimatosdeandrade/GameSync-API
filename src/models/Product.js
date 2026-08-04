@@ -16,10 +16,6 @@ const Product = db.define('Product', {
         type: DataTypes.TEXT,
         allowNull: false,
     },
-    img_image: {
-        type: DataTypes.TEXT,
-        allowNull: false
-    },
     id_type: {
         type: DataTypes.INTEGER,
         allowNull: false
