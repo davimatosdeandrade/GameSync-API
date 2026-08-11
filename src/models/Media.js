@@ -28,8 +28,10 @@ const Media = db.define('Media', {
 }, {
     tableName: 'tb_medias',
     timestamps: true,
+    paranoid: true,
     createdAt: 'dt_createdAt',
     updatedAt: 'dt_updatedAt',
+    deletedAt: 'dt_deletedAt',
 });
 
 module.exports = Media;
