@@ -1,46 +1,39 @@
 const Sequelize = require('sequelize');
-const { Product, Offer, Category, Media, Type, Developer, Distributor, Language } = require('../models');
+const { Product, Offer, Category, Media, Type, Developer, Distributor, Language, Store } = require('../models');
 
 const productController = {
-    async getCatalog(res, next) {
+    async getCatalog(req, res, next) {
         try {
             const catalog = await Product.findAll({
-                where: { dt_deleted: null },
-                attributes: [
-                    'id_product', 
-                    'nm_name', 
-                    [Sequelize.fn('MIN', Sequelize.col('Offers.vl_price')), 'lowest_price'],
-                    [Sequelize.fn('MAX', Sequelize.col('Offers.vl_price')), 'highest_price']
-                ],
+                where: { dt_deletedAt: null },
+                attributes: ['id_product', 'nm_name'],
                 include: [
                     {
-                        model: Offer,
-                        attributes: [],
+                        model: Type,
+                        required: true,
                         where: { dt_deletedAt: null },
-                        required: false,
-                    },
-                    {
-                        model: Category,
-                        attributes: ['nm_name'],
-                        through: { attributes: [] },
-                        where: { dt_deletedAt: null },
-                        required: false,
+                        attributes: ['id_type', 'nm_name'],
                     },
                     {
                         model: Media,
-                        attributes: ['url'],
-                        where: { tp_type: 'image' },
                         required: false,
-                        limit: 1,
-                        order: [['order_index', 'ASC']],
+                        where: { tp_type: 'cover', tp_aspect: '9:16', dt_deletedAt: null },
+                        attributes: ['id_media', 'tp_type', 'tp_aspect', 'url'], 
+                    },
+                    {
+                        model: Offer,
+                        required: false,
+                        where: { dt_deletedAt: null },
+                        attributes: ['id_offer', 'vl_price'],  
+                        include: {
+                            model: Store,
+                            required: true,
+                            where: { dt_deletedAt: null },
+                            attributes: ['id_store', 'nm_name'], 
+                        },
                     },
                 ],
-                group: ['Product.id_product'], 
-                order: [
-                [Sequelize.literal('MIN(`Offers`.`vl_price`) IS NOT NULL'), 'DESC'],
-                ['nm_name', 'ASC'],
-            ],
-                subQuery: false
+                subQuery: false,
             });
 
             const formatted = catalog.map(p => {
@@ -48,20 +41,34 @@ const productController = {
                 return {
                     id: data.id_product,
                     name: data.nm_name,
-                    lowest_price: data.lowest_price ?? null,
-                    highest_price: data.highest_price ?? null,
-                    categories: data.Categories?.map(c => c.nm_name) ?? [],
-                    image: data.Media?.[0]?.url ?? null,
+                    type: { 
+                        id: data.Type.id_type, 
+                        name: data.Type.nm_name, 
+                    },
+                    cover: data.Medias?.[0] ? {
+                        id: data.Medias[0].id_media,
+                        type: data.Medias[0].tp_type,
+                        aspect: data.Medias[0].tp_aspect,
+                        url: data.Medias[0].url,
+                    } : [],
+                    offers: data.Offers?.map(o => ({
+                        id: o.id_offer,
+                        price: o.vl_price,
+                        store: { 
+                            id: o.Store.id_store, 
+                            name: o.Store.nm_name, 
+                        },
+                    })) ?? [],
                 };
             });
 
             return res.status(200).json({ data: formatted });
         } catch (error) {
             next(error);
-        }
+        };
     },
 
-    async getHighlights(res, next) {
+    async getHighlights(req, res, next) {
         try {
             const highlights = await Highlight.findAll({
                 where: { dt_deletedAt: null },
@@ -69,41 +76,41 @@ const productController = {
                 include: [
                     {
                         model: Product,
-                        attributes: [
-                            'id_product',
-                            'nm_name',
-                            [Sequelize.fn('MIN', Sequelize.col('Products->Offers.vl_price')), 'lowest_price'],
-                            [Sequelize.fn('MAX', Sequelize.col('Products->Offers.vl_price')), 'highest_price'],
-                        ],
-                        through: { attributes: [] },
+                        required: true,
                         where: { dt_deletedAt: null },
-                        required: false,
+                        attributes: ['id_product','nm_name'],
                         include: [
                             {
-                                model: Offer,
-                                attributes: [],
+                                model: Type,
+                                required: true,
                                 where: { dt_deletedAt: null },
-                                required: false,
-                            },
-                            {
-                                model: Category,
-                                attributes: ['nm_name'],
-                                through: { attributes: [] },
-                                required: false,
+                                attributes: ['id_type', 'nm_name'],
                             },
                             {
                                 model: Media,
-                                attributes: ['url'],
-                                where: { tp_type: 'image' },
                                 required: false,
-                                limit: 1,
-                                order: [['order_index', 'ASC']],
+                                where: { tp_type: 'cover', tp_aspect: '16:9', dt_deletedAt: null },
+                                attributes: ['id_media', 'tp_type', 'tp_aspect', 'url'],
+                            },
+                            {
+                                model: Offer,
+                                required: false,
+                                where: { dt_deletedAt: null },
+                                attributes: ['id_offer', 'vl_price'],
+                                include: [
+                                    {
+                                        model: Store,
+                                        required: true,
+                                        where: { dt_deletedAt: null },
+                                        attributes: ['id_store', 'nm_name'],
+                                    },
+                                ],
                             },
                         ],
                     },
                 ],
-                group: ['Highlight.id_highlight', 'Products.id_product'],
                 subQuery: false,
+                group: ['Highlight.id_highlight', 'Products.id_product'],
             });
 
             const formatted = highlights.map(h => {
@@ -114,10 +121,24 @@ const productController = {
                     products: data.Products?.map(p => ({
                         id: p.id_product,
                         name: p.nm_name,
-                        lowest_price: p.lowest_price ?? null,
-                        highest_price: p.highest_price ?? null,
-                        categories: p.Categories?.map(c => c.nm_name) ?? [],
-                        image: p.Media?.[0]?.url ?? null,
+                        type: { 
+                            id: p.Type.id_type, 
+                            name: p.Type.nm_name,
+                        },
+                        cover: p.Medias?.[0] ? { 
+                            id: p.Medias[0].id_media, 
+                            type: p.Medias[0].tp_type, 
+                            aspect: p.Medias[0].tp_aspect, 
+                            url: p.Medias[0].url, 
+                        } : [],
+                        offers: p.Offers?.map(o => ({
+                            id: o.id_offer,
+                            price: o.vl_price,
+                            store: { 
+                                id: o.Store.id_store, 
+                                name: o.Store.nm_name,
+                            },
+                        })) ?? [],
                     })) ?? [],
                 };
             });
@@ -125,7 +146,7 @@ const productController = {
             return res.status(200).json({ data: formatted });
         } catch (error) {
             next(error);
-        }
+        };
     },
 
     async getProductByPk(req, res, next) {
@@ -216,7 +237,7 @@ const productController = {
             return res.status(200).json({ data: formatted });
         } catch (error) {
             next(error);
-        }
+        };
     }
 
     // // 2. TELA DE DETALHES: Traz o jogo com todas as suas ofertas detalhadas com o nome da loja

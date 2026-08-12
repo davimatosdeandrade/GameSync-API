@@ -12,7 +12,11 @@ const Media = db.define('Media', {
         allowNull: false,
     },
     tp_type: {
-        type: DataTypes.ENUM('image', 'video'),
+        type: DataTypes.ENUM('cover', 'banner', 'screenshot', 'icon', 'trailer', 'gameplay'),
+        allowNull: false,
+    },
+    tb_aspect: {
+        type: DataTypes.ENUM('16:9', '9:16', '21:5', '3:4', 'free'),
         allowNull: false,
     },
     url: {
@@ -20,11 +24,6 @@ const Media = db.define('Media', {
         allowNull: false,
         unique: true,
     },
-    order_index: {
-        type: DataTypes.INTEGER,
-        allowNull: false,
-        defaultValue: 0,
-    }
 }, {
     tableName: 'tb_medias',
     timestamps: true,
