@@ -15,7 +15,7 @@ const Media = db.define('Media', {
         type: DataTypes.ENUM('cover', 'banner', 'screenshot', 'icon', 'trailer', 'gameplay'),
         allowNull: false,
     },
-    tb_aspect: {
+    tp_aspect: {
         type: DataTypes.ENUM('16:9', '9:16', '21:5', '3:4', 'free'),
         allowNull: false,
     },

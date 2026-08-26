@@ -18,7 +18,7 @@ const Category = db.define('Category', {
     paranoid: true,
     createdAt: 'dt_createdAt',
     updatedAt: 'dt_updatedAt',
-    deletedAt: 'deletedAt'
+    deletedAt: 'dt_deletedAt'
 });
 
 module.exports = Category;

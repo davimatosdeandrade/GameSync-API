@@ -1,11 +1,66 @@
 const Sequelize = require('sequelize');
-const { Product, Offer, Category, Media, Type, Developer, Distributor, Language, Store } = require('../models');
+const {
+    Product, Offer, Category, Media, Type,
+    Developer, Distributor, Language, Store,
+    Code, Highlight,
+} = require('../models');
+
+async function getOffersByProductIds(productIds) {
+    if (!productIds.length) return {};
+
+    const offers = await Offer.findAll({
+        where: { dt_deletedAt: null, id_product: productIds },
+        attributes: [
+            'id_offer',
+            'id_product',
+            'vl_price',
+            [Sequelize.fn('COUNT', Sequelize.col('Codes.id_code')), 'stock'],
+        ],
+        include: [
+            {
+                model: Store,
+                required: true,
+                where: { dt_deletedAt: null },
+                attributes: ['id_store', 'nm_name'],
+            },
+            {
+                model: Code,
+                required: false,
+                where: { tp_status: 'available', dt_deletedAt: null },
+                attributes: [],
+            },
+        ],
+        group: ['Offer.id_offer', 'Store.id_store'],
+        subQuery: false,
+    });
+
+    return offers.reduce((acc, o) => {
+        const data = o.toJSON();
+        if (Number(data.stock) <= 0) return acc;
+
+        if (!acc[data.id_product]) acc[data.id_product] = [];
+        acc[data.id_product].push({
+            id: data.id_offer,
+            price: data.vl_price,
+            stock: Number(data.stock),
+            store: { id: data.Store.id_store, name: data.Store.nm_name },
+        });
+        return acc;
+    }, {});
+}
 
 const productController = {
     async getCatalog(req, res, next) {
         try {
-            const catalog = await Product.findAll({
-                where: { dt_deletedAt: null },
+            const { search } = req.query;
+
+            const where = { dt_deletedAt: null };
+            if (search) {
+                where.nm_name = { [Sequelize.Op.like]: `%${search}%` };
+            }
+
+            const products = await Product.findAll({
+                where,
                 attributes: ['id_product', 'nm_name'],
                 include: [
                     {
@@ -16,56 +71,37 @@ const productController = {
                     },
                     {
                         model: Media,
+                        as: 'Medias',
                         required: false,
                         where: { tp_type: 'cover', tp_aspect: '9:16', dt_deletedAt: null },
-                        attributes: ['id_media', 'tp_type', 'tp_aspect', 'url'], 
-                    },
-                    {
-                        model: Offer,
-                        required: false,
-                        where: { dt_deletedAt: null },
-                        attributes: ['id_offer', 'vl_price'],  
-                        include: {
-                            model: Store,
-                            required: true,
-                            where: { dt_deletedAt: null },
-                            attributes: ['id_store', 'nm_name'], 
-                        },
+                        attributes: ['id_media', 'tp_type', 'tp_aspect', 'url'],
                     },
                 ],
-                subQuery: false,
             });
 
-            const formatted = catalog.map(p => {
+            const productIds = products.map(p => p.id_product);
+            const offersByProduct = await getOffersByProductIds(productIds);
+
+            const formatted = products.map(p => {
                 const data = p.toJSON();
                 return {
                     id: data.id_product,
                     name: data.nm_name,
-                    type: { 
-                        id: data.Type.id_type, 
-                        name: data.Type.nm_name, 
-                    },
+                    type: { id: data.Type.id_type, name: data.Type.nm_name },
                     cover: data.Medias?.[0] ? {
                         id: data.Medias[0].id_media,
                         type: data.Medias[0].tp_type,
                         aspect: data.Medias[0].tp_aspect,
                         url: data.Medias[0].url,
-                    } : [],
-                    offers: data.Offers?.map(o => ({
-                        id: o.id_offer,
-                        price: o.vl_price,
-                        store: { 
-                            id: o.Store.id_store, 
-                            name: o.Store.nm_name, 
-                        },
-                    })) ?? [],
+                    } : null,
+                    offers: offersByProduct[data.id_product] ?? [],
                 };
             });
 
             return res.status(200).json({ data: formatted });
         } catch (error) {
             next(error);
-        };
+        }
     },
 
     async getHighlights(req, res, next) {
@@ -78,7 +114,7 @@ const productController = {
                         model: Product,
                         required: true,
                         where: { dt_deletedAt: null },
-                        attributes: ['id_product','nm_name'],
+                        attributes: ['id_product', 'nm_name'],
                         include: [
                             {
                                 model: Type,
@@ -91,27 +127,15 @@ const productController = {
                                 required: false,
                                 where: { tp_type: 'cover', tp_aspect: '16:9', dt_deletedAt: null },
                                 attributes: ['id_media', 'tp_type', 'tp_aspect', 'url'],
-                            },
-                            {
-                                model: Offer,
-                                required: false,
-                                where: { dt_deletedAt: null },
-                                attributes: ['id_offer', 'vl_price'],
-                                include: [
-                                    {
-                                        model: Store,
-                                        required: true,
-                                        where: { dt_deletedAt: null },
-                                        attributes: ['id_store', 'nm_name'],
-                                    },
-                                ],
+                                as: 'Medias',
                             },
                         ],
                     },
                 ],
-                subQuery: false,
-                group: ['Highlight.id_highlight', 'Products.id_product'],
             });
+
+            const allProductIds = highlights.flatMap(h => h.Products.map(p => p.id_product));
+            const offersByProduct = await getOffersByProductIds(allProductIds);
 
             const formatted = highlights.map(h => {
                 const data = h.toJSON();
@@ -121,24 +145,14 @@ const productController = {
                     products: data.Products?.map(p => ({
                         id: p.id_product,
                         name: p.nm_name,
-                        type: { 
-                            id: p.Type.id_type, 
-                            name: p.Type.nm_name,
-                        },
-                        cover: p.Medias?.[0] ? { 
-                            id: p.Medias[0].id_media, 
-                            type: p.Medias[0].tp_type, 
-                            aspect: p.Medias[0].tp_aspect, 
-                            url: p.Medias[0].url, 
-                        } : [],
-                        offers: p.Offers?.map(o => ({
-                            id: o.id_offer,
-                            price: o.vl_price,
-                            store: { 
-                                id: o.Store.id_store, 
-                                name: o.Store.nm_name,
-                            },
-                        })) ?? [],
+                        type: { id: p.Type.id_type, name: p.Type.nm_name },
+                        cover: p.Medias?.[0] ? {
+                            id: p.Medias[0].id_media,
+                            type: p.Medias[0].tp_type,
+                            aspect: p.Medias[0].tp_aspect,
+                            url: p.Medias[0].url,
+                        } : null,
+                        offers: offersByProduct[p.id_product] ?? [],
                     })) ?? [],
                 };
             });
@@ -146,62 +160,63 @@ const productController = {
             return res.status(200).json({ data: formatted });
         } catch (error) {
             next(error);
-        };
+        }
     },
 
     async getProductByPk(req, res, next) {
         try {
             const { id } = req.params;
 
-            const product = await Product.findByPk(id, {
+            const product = await Product.findOne({
+                where: { id_product: id, dt_deletedAt: null },
                 attributes: ['id_product', 'nm_name', 'ds_desc', 'dt_release'],
                 include: [
                     {
                         model: Type,
-                        attributes: ['id_type', 'nm_name'],
+                        required: true,
                         where: { dt_deletedAt: null },
-                        required: false,
+                        attributes: ['id_type', 'nm_name'],
                     },
                     {
                         model: Distributor,
-                        attributes: ['id_distributor', 'nm_name'],
+                        required: true,
                         where: { dt_deletedAt: null },
-                        required: false,
+                        attributes: ['id_distributor', 'nm_name'],
                     },
                     {
                         model: Developer,
-                        attributes: ['id_developer', 'nm_name'],
+                        required: true,
                         where: { dt_deletedAt: null },
-                        required: false,
+                        attributes: ['id_developer', 'nm_name'],
                     },
                     {
                         model: Media,
-                        attributes: ['id_media', 'tp_type', 'url', 'order_index'],
+                        required: false,
                         where: { dt_deletedAt: null },
-                        required: null,
+                        attributes: ['id_media', 'tp_type', 'tp_aspect', 'url'],
+                        as: 'Medias',
                     },
                     {
                         model: Language,
-                        attributes: ['id_language', 'nm_name'],
-                        through: {
-                            attributes: ['bt_audio', 'bt_interface', 'bt_subtitles'],
-                        },
-                        where: { dt_deletedAt: null },
                         required: false,
+                        where: { dt_deletedAt: null },
+                        attributes: ['id_language', 'nm_name'],
+                        through: { attributes: ['bt_audio', 'bt_interface', 'bt_subtitles'] },
                     },
                     {
                         model: Category,
-                        attributes: ['id_category', 'nm_name'],
-                        where: { dt_deletedAt: null },
                         required: false,
-                    }
+                        where: { dt_deletedAt: null },
+                        attributes: ['id_category', 'nm_name'],
+                    },
                 ],
             });
 
-            if (!product || product.dt_deletedAt) {
+            if (!product) {
                 return res.status(404).json({ message: 'Product not found.' });
             }
 
+            const offersByProduct = await getOffersByProductIds([product.id_product]);
             const data = product.toJSON();
 
             const formatted = {
@@ -211,78 +226,30 @@ const productController = {
                 release: data.dt_release,
                 type: data.Type ? { id: data.Type.id_type, name: data.Type.nm_name } : null,
                 distributor: data.Distributor ? { id: data.Distributor.id_distributor, name: data.Distributor.nm_name } : null,
-                developer: data.Developer ? { id: data.Developer.id_developer, name: data.Developer.id_developer } : null,
-
+                developer: data.Developer ? { id: data.Developer.id_developer, name: data.Developer.nm_name } : null,
                 medias: data.Media?.map(m => ({
-                    id: m.id_media,
-                    type: m.tp_type,
+                    id: m.id_media, 
+                    type: m.tp_type, 
+                    aspect: m.tp_aspect, 
                     url: m.url,
-                    order: m.order_index,
                 })) ?? [],
-
                 languages: data.Language?.map(l => ({
                     id: l.id_language,
-                    name: l.nm_language,
+                    name: l.nm_name,
                     audio: l.tb_product_languages?.bt_audio ?? false,
                     interface: l.tb_product_languages?.bt_interface ?? false,
                     subtitles: l.tb_product_languages?.bt_subtitles ?? false,
                 })) ?? [],
-
-                categories: data.Category?.map(c => ({
-                    id: c.id_category,
-                    name: c.nm_name,
-                })) ?? [],
+                categories: data.Category?.map(c => ({ id: c.id_category, name: c.nm_name })) ?? [],
+                offers: offersByProduct[data.id_product] ?? [],
             };
 
             return res.status(200).json({ data: formatted });
         } catch (error) {
+            console.error('Erro em getProductByPk:', error.original ?? error);
             next(error);
-        };
-    }
-
-    // // 2. TELA DE DETALHES: Traz o jogo com todas as suas ofertas detalhadas com o nome da loja
-    // async getProductDetails(req, res) {
-    //     try {
-    //         const { id } = req.params;
-
-    //         const product = await Product.findByPk(id, {
-    //             attributes: ['id_product', 'nm_name', 'ds_desc', 'img_image', 'dt_release'],
-    //             include: [
-    //                 {
-    //                     model: Offer,
-    //                     attributes: ['id_offer', 'vl_price'],
-    //                     include: [
-    //                         {
-    //                             model: Store,
-    //                             attributes: ['nm_name'] // Puxa o nome da loja (Steam, Epic, etc.) para o seu botão seletor
-    //                         }
-    //                     ]
-    //                 }
-    //             ]
-    //         });
-
-    //         if (!product) {
-    //             return res.status(404).json({ message: "Jogo não encontrado." });
-    //         }
-
-    //         return res.status(200).json(product);
-    //     } catch (error) {
-    //         return res.status(500).json({ 
-    //             message: "Erro ao carregar os detalhes do produto.", 
-    //             error: error.message 
-    //         });
-    //     }
-    // },
-
-    // async create(req, res) {
-    //     try {
-    //         const newProduct = await Product.create(req.body);
-    //         return res.status(201).json(newProduct);
-    //     } catch (error) {
-    //         console.log(error);
-    //         return res.status(400).json({ error: 'Error creating product.'})
-    //     }
-    // }
+        }
+    },
 };
 
 module.exports = productController;
